@@ -169,11 +169,8 @@ if __name__ == "__main__":
 	CUDA = param.cuda
 	IMG_EXT = (".jpg", ".jpeg")
 	path = param.dir
-
-	if platform.system() != "Windows":
-		path = "/mnt/e" + path
-	else:
-		path = os.path.abspath(path)
+	path = os.path.abspath(path)
+	
 	start_time = time()
 	list_img = os.listdir(path)
 	list_img = [os.path.join(path, x) for x in list_img if x.lower().endswith(IMG_EXT)]
