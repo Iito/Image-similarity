@@ -1,39 +1,41 @@
 import argparse
+import os
+import sys
 from functools import partial
 from multiprocessing import Pool
 from multiprocessing.pool import ThreadPool
-import os
-import pdb
-import platform
-from pprint import pprint
-from re import I
 from time import time
 from typing import *
-import sys
 
 import cv2
 import numpy as np
-from tqdm import tqdm
 import rawpy
-
 from template_matching import imageSimilarityCPU, imageSimilarityCUDA
+from tqdm import tqdm
 
 GREY_SCALE = cv2.COLOR_BGR2GRAY
+SCALE_PERCENT = 10 / 100
 
-def loadImg(img: str, grey: bool = True) -> np.ndarray:
+def loadImg(img: str, scale_pct: float, grey: bool = True) -> np.ndarray:
 	
 	if img.lower().endswith(".nef"):
 		r = rawpy.imread(img).postprocess()
 	else:
 		r = cv2.imread(img)
+	if scale_pct > 0.0 and scale_pct < 100.0:
+		width  = int(r.shape[1] * SCALE_PERCENT)
+		height = int(r.shape[0] * SCALE_PERCENT)
+		dim = (width, height)
+		r = cv2.resize(r, dim, interpolation=cv2.INTER_AREA)
 	if grey:
 		r = cv2.cvtColor(r, GREY_SCALE)
 	return r
 
-def loadImgCUDA(img: str, grey: bool = True) -> cv2.cuda_GpuMat:
+def loadImgCUDA(img: np.ndarray, grey: bool = True) -> cv2.cuda_GpuMat:
 	
 	if not isinstance(img, np.ndarray):
-		img = loadImg(img, False)
+		print("imgs, should be type: np.ndarray for faster loading.")
+		img = loadImg(img, grey=False)
 	cuImg = cv2.cuda_GpuMat()
 	cuImg.upload(img)
 	if grey:
@@ -126,7 +128,7 @@ def blurDetection(images: List[ Dict[ str, Union[ cv2.cuda_GpuMat, np.ndarray]]]
 	scores = sorted(scores, key=lambda scores: scores[1], reverse=True)
 	return scores
 
-def sortAndOrder(group: List[Tuple[str, float]], move: bool = False) -> None:
+def sortAndOrder(group: List[Tuple[str, float]], size: str, move: bool = False) -> None:
 	"""
 	This method process groups of images with similarity, keep the best one according to blur detection
 	and move all the other in a folder named after the best one.
@@ -145,13 +147,13 @@ def sortAndOrder(group: List[Tuple[str, float]], move: bool = False) -> None:
 			if not os.path.exists(dir_name) and move:
 				os.makedirs(dir_name)
 			fp = dir_name if move else path
-			fn = open(os.path.join(fp, f"{grp_name}_scores.txt"), 'a')
-			fn.write(f"{img_name}\t{score}\n")
+			fn = open(os.path.join(fp, f"{grp_name}_scores.txt"), 'w')
+			fn.write(f"{img_name}\t{score}\t{size}\n")
 			continue
 		new_img_path = os.path.join(dir_name, img_name)
 		if move:
 			os.rename(image, new_img_path)
-		fn.write(f"{img_name}\t{score}\n")
+		fn.write(f"{img_name}\t{score}\t{size}\n")
 
 
 if __name__ == "__main__":
@@ -164,16 +166,25 @@ if __name__ == "__main__":
 	param.add_argument("--blur", type=int, default=100)
 	param.add_argument("--rename", action='store_true', default=False)
 	param.add_argument("--batch_size", type=int, default=10)
+	param.add_argument("--resize_scale", '-r', type=float, nargs="*")
+
 	param = param.parse_args()
 
 	CUDA = param.cuda
+	resize_scale = SCALE_PERCENT if param.resize_scale == [] else param.resize_scale[0]
+	resize_scale = resize_scale / 100 if resize_scale > 1 else resize_scale
+
+	if resize_scale <= 0.5 and resize_scale != 0.0:
+		print("Warning: downscalling lower than 50% will increase speed but lower precision")
+		print(f"Current rescale: {int(resize_scale * 100)}% of actual size")
+	elif resize_scale > 1.0:
+		resize_scale = 1.0
+	
 	IMG_EXT = (".jpg", ".jpeg")
 	path = param.dir
 
-	if platform.system() != "Windows":
-		path = "/mnt/e" + path
-	else:
-		path = os.path.abspath(path)
+	path = os.path.abspath(path)
+
 	start_time = time()
 	list_img = os.listdir(path)
 	list_img = [os.path.join(path, x) for x in list_img if x.lower().endswith(IMG_EXT)]
@@ -195,7 +206,7 @@ if __name__ == "__main__":
 	print(f"Loading {len(list_img)} images into memory")
 	GREY = False if CUDA else True
 	
-	loadImgs = partial(loadImg, grey=GREY)
+	loadImgs = partial(loadImg, grey=GREY, scale_pct=resize_scale)
 	imgs = pool.map(loadImgs, list_img)
 
 	if CUDA:
@@ -207,10 +218,17 @@ if __name__ == "__main__":
 
 	
 	dataset = {k:v for k, v in zip(list_img, imgs)}
-	similar_imgs_name = findSimilarity(dataset, imageSimilarity, pool, param.threshold, param.match_ratio, param.batch_size)
+	similar_imgs_name = findSimilarity(
+										dataset, 
+										imageSimilarity, 
+										pool, 
+										param.threshold, 
+										param.match_ratio, 
+										param.batch_size
+									)
 	group = len(similar_imgs_name)
 	nb_per_group = [len(x) for x in similar_imgs_name]
-
+	
 	print(f"There {'are' if group > 1 else 'is'} {group} group of similar images")
 	
 	similar_imgs = []
@@ -221,9 +239,15 @@ if __name__ == "__main__":
 
 	print("Getting the best image out of each group")
 	bests = pool.map(blurDetection, similar_imgs)
-	sortImages = partial(sortAndOrder, move=param.rename)
+	resize_scale = str(int(resize_scale * 100))
+	sortImages = partial(sortAndOrder, move=param.rename, size=resize_scale)
 	tp.map(sortImages, bests)
-	
+
+	if not CUDA:
+		pool.close()
+		pool.join()
+	tp.close()
+	tp.join()
 	print(time() - start_time)
 
 
