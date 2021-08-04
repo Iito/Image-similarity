@@ -4,12 +4,11 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-opencv-python = "*"
-opencv-contrib-python = "*"
-tqdm = "*"
-rawpy = "*"
+scikit-image = "*"
+pillow = "*"
+tensorflow = "==2.5.0"
 
 [dev-packages]
 
 [requires]
-python_version = "3.9"
+python_version = "3.8"

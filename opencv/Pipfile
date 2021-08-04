@@ -1,0 +1,19 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+opencv-python = "*"
+opencv-contrib-python = "*"
+tqdm = "*"
+rawpy = "*"
+scikit-image = "*"
+pillow = "*"
+tensorflow = "*"
+numpy = "*"
+
+[dev-packages]
+
+[requires]
+python_version = "3.9"
