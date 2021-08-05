@@ -166,12 +166,12 @@ if __name__ == "__main__":
 	param.add_argument("--blur", type=int, default=100)
 	param.add_argument("--rename", action='store_true', default=False)
 	param.add_argument("--batch_size", type=int, default=10)
-	param.add_argument("--resize_scale", '-r', type=float, nargs="*")
+	param.add_argument("--resize", '-r', type=float, nargs="*")
 
 	param = param.parse_args()
 
 	CUDA = param.cuda
-	resize_scale = SCALE_PERCENT if param.resize_scale == [] else param.resize_scale[0]
+	resize_scale = SCALE_PERCENT if param.resize == [] or param.resize == None else param.resize[0]
 	resize_scale = resize_scale / 100 if resize_scale > 1 else resize_scale
 
 	if resize_scale <= 0.5 and resize_scale != 0.0:
@@ -180,18 +180,34 @@ if __name__ == "__main__":
 	elif resize_scale > 1.0:
 		resize_scale = 1.0
 	
-	IMG_EXT = (".jpg", ".jpeg")
+	#IMG_EXT = (".jpg", ".jpeg")
+	IMG_EXT = (".nef")
 	path = param.dir
 
 	path = os.path.abspath(path)
 
 	start_time = time()
-	list_img = os.listdir(path)
-	list_img = [os.path.join(path, x) for x in list_img if x.lower().endswith(IMG_EXT)]
+	folder_files = os.listdir(path)
+	processed_imgs = [os.path.join(path, x) for x in folder_files if x.lower().endswith("scores.txt")]
+	list_img = [os.path.join(path, x) for x in folder_files if x.lower().endswith(IMG_EXT)]
 	list_img.sort()
 	if len(list_img) < 2:
 		print("You need at least 2 images to  compare")
 		sys.exit()
+	bests = []
+	if len(processed_imgs) > 0 and param.rename:
+		for score in processed_imgs:
+			s = open(score, 'r')
+			lines = [x.strip("\n").split("\t") for x in s]
+			scores = [(os.path.join(path, a), b) for a, b, c in lines]
+			bests.append(scores)
+		resize = lines[0][2]
+		if int(resize) / 100 != resize_scale:
+			print("Different resize scale found between processed and requested")
+			bests = []
+		else:
+			resize_scale = resize
+			[os.remove(x) for x in processed_imgs]
 	tp = ThreadPool()
 	pool = Pool()
 
@@ -201,45 +217,46 @@ if __name__ == "__main__":
 		except:
 			print("No CUDA detected or opencv hasn't been compile with CUDA")
 			CUDA = False
+	if bests == []:
+		# Load images
+		print(f"Loading {len(list_img)} images into memory")
+		GREY = False if CUDA else True
+		
+		loadImgs = partial(loadImg, grey=GREY, scale_pct=resize_scale)
+		imgs = pool.map(loadImgs, list_img)
 
-	# Load images
-	print(f"Loading {len(list_img)} images into memory")
-	GREY = False if CUDA else True
-	
-	loadImgs = partial(loadImg, grey=GREY, scale_pct=resize_scale)
-	imgs = pool.map(loadImgs, list_img)
+		if CUDA:
+			pool = tp
+			imgs = pool.map(loadImgCUDA, imgs)
+			imageSimilarity = imageSimilarityCUDA
+		else:
+			imageSimilarity = imageSimilarityCPU
 
-	if CUDA:
-		pool = tp
-		imgs = pool.map(loadImgCUDA, imgs)
-		imageSimilarity = imageSimilarityCUDA
-	else:
-		imageSimilarity = imageSimilarityCPU
+		
+		dataset = {k:v for k, v in zip(list_img, imgs)}
+		similar_imgs_name = findSimilarity(
+											dataset, 
+											imageSimilarity, 
+											pool, 
+											param.threshold, 
+											param.match_ratio, 
+											param.batch_size
+										)
+		group = len(similar_imgs_name)
+		nb_per_group = [len(x) for x in similar_imgs_name]
+		
+		print(f"There {'are' if group > 1 else 'is'} {group} group of similar images")
+		
+		similar_imgs = []
 
-	
-	dataset = {k:v for k, v in zip(list_img, imgs)}
-	similar_imgs_name = findSimilarity(
-										dataset, 
-										imageSimilarity, 
-										pool, 
-										param.threshold, 
-										param.match_ratio, 
-										param.batch_size
-									)
-	group = len(similar_imgs_name)
-	nb_per_group = [len(x) for x in similar_imgs_name]
-	
-	print(f"There {'are' if group > 1 else 'is'} {group} group of similar images")
-	
-	similar_imgs = []
+		for group in similar_imgs_name:
+			group_array = {x:dataset[x] for x in group}
+			similar_imgs.append(group_array)
 
-	for group in similar_imgs_name:
-		group_array = {x:dataset[x] for x in group}
-		similar_imgs.append(group_array)
+		print("Getting the best image out of each group")
+		bests = pool.map(blurDetection, similar_imgs)
+		resize_scale = str(int(resize_scale * 100))
 
-	print("Getting the best image out of each group")
-	bests = pool.map(blurDetection, similar_imgs)
-	resize_scale = str(int(resize_scale * 100))
 	sortImages = partial(sortAndOrder, move=param.rename, size=resize_scale)
 	tp.map(sortImages, bests)
 
