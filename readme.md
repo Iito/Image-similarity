@@ -1,10 +1,15 @@
-# Description
+# Introduction
 As an amater photographer, I take a lot of pictures, often from the same subject with different exposure, iso etc...\
 As such I end up with many photos to parse and sorts.\
 So to help you out sorting this solution should give you the best of similar shots.
 
-## Requirements
-It uses basic computer vision libraries, easy enough to install (except on Windows..)
+## Dependencies
+* Python 3 >= 3.9
+* NumPy >= 1.21.1
+* OpenCV >= 4.5.3
+* OpenCV >= 4.5.3
+* RawPy >= 0.16.0
+* tqdm >= 4.62.0
 ### CPU only
 You can use the CPU only version quite easily by simply install the requirements defined in the requirements.txt, nothing more to do.
 ### CUDA (Unix, Windows, WSL2)
@@ -26,7 +31,8 @@ Photos in the directory should have a similar context: taken on the same day or 
 (If you try to compare the best photos between photos taken in different places expect odd results)
 By comparing photos with each other the program will create group of similar photos, here in the example, image_1, image_2 and image_3 are "similar" they were taken the same day and discribe the same subject with a different angle or exposure, iso etc..\
 image_4 for reference was taken another day at a total different location.\
-The program will try to "match" using template matching (norm hamming) with all the others. \
+The program will try to "match" using template matching (norm hamming) with all the others. 
+
 ### Step 1
 Small lookup of what it will do:
 - image_1 similar to image_2 ? yes
@@ -50,4 +56,7 @@ group_1: {
 ### Step 2
 From each group we will look for the one with less blur, for that we will use variance of Laplace formula.\
 It will output a number for each image, the lower the number the blurier.\
-Ideally the one with high number will be the best match from the group.
+Ideally the one with the highest number will be the best match from the group.
+
+### Step 3 (Optional)
+If you select the flag `--rename` the program will therefore move the 'rejected' photos into a folder named after the best match.
