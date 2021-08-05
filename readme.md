@@ -10,6 +10,24 @@ So to help you out sorting this solution should give you the best of similar sho
 * OpenCV >= 4.5.3
 * RawPy >= 0.16.0
 * tqdm >= 4.62.0
+
+## Run the script
+How the run the scripts with demo images
+```bash
+python ./main.py --dir ./
+```
+### Optional flags
+* `--resize`, `-r` : will resize according to a percentage of the input image (default full size).
+    * `--resize 50` :  will downscale the input image to 50% of its full size.
+* `--raw` : Use raw extension file, only support .NEF, .ARW, .CRW (default False)
+* `--rename` : if used, will moved the rejected match to a folder named after the best match (default: False)
+* `--cuda` : will use GPU if the library has been compiled with cuda (default False)
+* `--batch_size` : number of upfront image each template can match, high number might lower performance and/or consume a lot of RAM (default: 10)
+#### Advanced flags
+* `--threshold`, `-th` : change the keypoints threshold for image similarity detection (default 200)
+* `--match_ratio`, `-mr` : 
+* `--blur` : blur threshold, the higher the less blurry, too high might decrease coverage
+## Installation 
 ### CPU only
 You can use the CPU only version quite easily by simply install the requirements defined in the requirements.txt, nothing more to do.
 ### CUDA (Unix, Windows, WSL2)
