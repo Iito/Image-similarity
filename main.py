@@ -15,6 +15,9 @@ from tqdm import tqdm
 
 GREY_SCALE = cv2.COLOR_BGR2GRAY
 SCALE_PERCENT = 10 / 100
+RAW_EXTENSION    = (".nef", ".arw", ".crw")
+NORMAL_EXTENSION = (".jpg", "jpeg", ".png")
+
 
 def loadImg(img: str, scale_pct: float, grey: bool = True) -> np.ndarray:
 	
@@ -167,21 +170,19 @@ if __name__ == "__main__":
 	param.add_argument("--rename", action='store_true', default=False)
 	param.add_argument("--batch_size", type=int, default=10)
 	param.add_argument("--resize", '-r', type=float, nargs="*")
-
+	param.add_argument("--raw", action="store_true", default=False)
 	param = param.parse_args()
 
 	CUDA = param.cuda
 	resize_scale = SCALE_PERCENT if param.resize == [] or param.resize == None else param.resize[0]
 	resize_scale = resize_scale / 100 if resize_scale > 1 else resize_scale
-
+	IMG_EXT = RAW_EXTENSION if param.raw else NORMAL_EXTENSION
 	if resize_scale <= 0.5 and resize_scale != 0.0:
 		print("Warning: downscalling lower than 50% will increase speed but lower precision")
 		print(f"Current rescale: {int(resize_scale * 100)}% of actual size")
 	elif resize_scale > 1.0:
 		resize_scale = 1.0
 	
-	#IMG_EXT = (".jpg", ".jpeg")
-	IMG_EXT = (".nef")
 	path = param.dir
 
 	path = os.path.abspath(path)
@@ -190,6 +191,10 @@ if __name__ == "__main__":
 	folder_files = os.listdir(path)
 	processed_imgs = [os.path.join(path, x) for x in folder_files if x.lower().endswith("scores.txt")]
 	list_img = [os.path.join(path, x) for x in folder_files if x.lower().endswith(IMG_EXT)]
+	
+	if ".arw" in list_img[0]:
+		print("Experimental, results may differ from other extensions")
+	
 	list_img.sort()
 	if len(list_img) < 2:
 		print("You need at least 2 images to  compare")
