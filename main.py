@@ -14,7 +14,6 @@ from template_matching import imageSimilarityCPU, imageSimilarityCUDA
 from tqdm import tqdm
 
 GREY_SCALE = cv2.COLOR_BGR2GRAY
-SCALE_PERCENT = 10 / 100
 RAW_EXTENSION    = (".nef", ".arw", ".crw")
 NORMAL_EXTENSION = (".jpg", "jpeg", ".png")
 
@@ -174,6 +173,7 @@ if __name__ == "__main__":
 	param = param.parse_args()
 
 	CUDA = param.cuda
+	SCALE_PERCENT = 100 if param.raw else 10 / 100
 	resize_scale = SCALE_PERCENT if param.resize == [] or param.resize == None else param.resize[0]
 	resize_scale = resize_scale / 100 if resize_scale > 1 else resize_scale
 	IMG_EXT = RAW_EXTENSION if param.raw else NORMAL_EXTENSION
@@ -192,13 +192,13 @@ if __name__ == "__main__":
 	processed_imgs = [os.path.join(path, x) for x in folder_files if x.lower().endswith("scores.txt")]
 	list_img = [os.path.join(path, x) for x in folder_files if x.lower().endswith(IMG_EXT)]
 	
-	if ".arw" in list_img[0]:
-		print("Experimental, results may differ from other extensions")
-	
 	list_img.sort()
 	if len(list_img) < 2:
 		print("You need at least 2 images to  compare")
 		sys.exit()
+	elif ".arw" in list_img[0]:
+		print("Experimental, results may differ from other extensions")
+	
 	bests = []
 	if len(processed_imgs) > 0 and param.rename:
 		for score in processed_imgs:
